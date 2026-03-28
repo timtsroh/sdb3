@@ -108,6 +108,9 @@ def get_macro_chart(ticker: str, period: str = "5y"):
             }.get(normalized_ticker, normalized_ticker)
             df = yf.download(yf_ticker, period=period, auto_adjust=True, progress=False)
 
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1)
+
         if df.empty:
             return {"data": [], "latest": None, "change": None}
 

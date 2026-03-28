@@ -7,6 +7,9 @@ import yfinance as yf
 import FinanceDataReader as fdr
 import pandas as pd
 from collections import OrderedDict
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 TTL_SECONDS = 3600
@@ -122,6 +125,7 @@ def fetch_stock_info(ticker: str, market: str) -> dict:
                 hi52   = info.get("fiftyTwoWeekHigh")
                 lo52   = info.get("fiftyTwoWeekLow")
             except Exception:
+                logger.exception("yfinance .info failed for %s.KS", ticker)
                 name = lookup_company_name(ticker, market) or ticker
                 mktcap = per = pbr = hi52 = lo52 = None
             return dict(ticker=ticker, name=name, market=market,
@@ -143,6 +147,7 @@ def fetch_stock_info(ticker: str, market: str) -> dict:
                         week52_high=info.get("fiftyTwoWeekHigh"),
                         week52_low=info.get("fiftyTwoWeekLow"))
     except Exception as e:
+        logger.exception("fetch_stock_info failed for %s (%s)", ticker, market)
         return {
             "ticker": ticker,
             "name": lookup_company_name(ticker, market) or ticker,
@@ -296,6 +301,8 @@ def get_chart(ticker: str, period: str = "1y", db: Session = Depends(get_db)):
             df = fdr.DataReader(ticker, start.strftime("%Y-%m-%d"))
         else:
             df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1)
         df = df[["Close"]].dropna().reset_index()
         df.columns = ["date", "close"]
         df["date"] = df["date"].astype(str)
