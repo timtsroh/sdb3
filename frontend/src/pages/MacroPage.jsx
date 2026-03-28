@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import axios from 'axios'
 import {
   CartesianGrid,
@@ -10,9 +10,12 @@ import {
   YAxis,
 } from 'recharts'
 
-const PANEL_COLORS = ['#0284c7', '#059669', '#ea580c', '#dc2626', '#7c3aed', '#db2777']
+const PANEL_COLORS = [
+  '#0284c7', '#059669', '#ea580c', '#dc2626', '#7c3aed',
+  '#db2777', '#0891b2', '#ca8a04', '#4f46e5', '#16a34a', '#e11d48',
+]
 
-function MacroPanel({ panel, color, period, onUpdate, presets }) {
+function MacroPanel({ panel, color, period, onUpdate, presets, index, onDragStart, onDragOver, onDrop, isDragOver }) {
   const [data, setData] = useState({ data: [], latest: null, change: null })
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -47,7 +50,15 @@ function MacroPanel({ panel, color, period, onUpdate, presets }) {
   }
 
   return (
-    <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <article
+      draggable
+      onDragStart={event => onDragStart(event, index)}
+      onDragOver={event => onDragOver(event, index)}
+      onDrop={event => onDrop(event, index)}
+      className={`rounded-[28px] border bg-white p-5 shadow-sm cursor-grab active:cursor-grabbing transition-all ${
+        isDragOver ? 'border-sky-400 ring-2 ring-sky-200' : 'border-slate-200'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Macro Panel</p>
@@ -96,22 +107,41 @@ function MacroPanel({ panel, color, period, onUpdate, presets }) {
 
       <div className="mt-4">
         {loading ? (
-          <div className="h-[180px] animate-pulse rounded-3xl bg-slate-100" />
+          <div className="h-[220px] animate-pulse rounded-3xl bg-slate-100" />
         ) : data.data.length > 0 ? (
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={data.data}>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={data.data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
-              <XAxis dataKey="date" hide />
-              <YAxis hide />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                tickFormatter={value => {
+                  const d = new Date(value)
+                  return `${d.getFullYear().toString().slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')}`
+                }}
+                interval="preserveStartEnd"
+                minTickGap={40}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                tickFormatter={value => {
+                  if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k'
+                  if (Math.abs(value) >= 1) return Number(value).toFixed(1)
+                  return Number(value).toFixed(3)
+                }}
+                width={45}
+                domain={['auto', 'auto']}
+              />
               <Tooltip
                 contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
                 formatter={value => [Number(value).toLocaleString(), panel.label]}
+                labelFormatter={label => label}
               />
               <Line type="monotone" dataKey="close" stroke={color} dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-[180px] items-center justify-center rounded-3xl bg-slate-50 text-sm text-slate-500">
+          <div className="flex h-[220px] items-center justify-center rounded-3xl bg-slate-50 text-sm text-slate-500">
             데이터를 가져오지 못했습니다.
           </div>
         )}
@@ -123,8 +153,10 @@ function MacroPanel({ panel, color, period, onUpdate, presets }) {
 export default function MacroPage() {
   const [panels, setPanels] = useState([])
   const [presets, setPresets] = useState([])
-  const [period, setPeriod] = useState('5y')
+  const [period, setPeriod] = useState('1y')
   const [loading, setLoading] = useState(true)
+  const [dragIndex, setDragIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
 
   useEffect(() => {
     loadPage()
@@ -144,14 +176,45 @@ export default function MacroPage() {
     }
   }
 
+  const handleDragStart = useCallback((event, index) => {
+    setDragIndex(index)
+    event.dataTransfer.effectAllowed = 'move'
+  }, [])
+
+  const handleDragOver = useCallback((event, index) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverIndex(index)
+  }, [])
+
+  const handleDrop = useCallback(async (event, dropIndex) => {
+    event.preventDefault()
+    setDragOverIndex(null)
+    if (dragIndex === null || dragIndex === dropIndex) return
+
+    const newPanels = [...panels]
+    const [dragged] = newPanels.splice(dragIndex, 1)
+    newPanels.splice(dropIndex, 0, dragged)
+    setPanels(newPanels)
+
+    const slots = newPanels.map(p => p.slot)
+    try {
+      await axios.put('/api/macro/panels/reorder', { slots })
+      loadPage()
+    } catch {
+      loadPage()
+    }
+    setDragIndex(null)
+  }, [dragIndex, panels])
+
   return (
     <div className="space-y-6">
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-sky-700/80">Phase 1</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-900">거시경제 6패널 모니터</h2>
-            <p className="mt-2 text-sm text-slate-500">미국 금리, 지수, 달러, 유가, 변동성, 나스닥 100을 1Y / 3Y / 5Y로 비교합니다.</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-900">거시경제 모니터</h2>
+            <p className="mt-2 text-sm text-slate-500">주요 거시경제 지표를 1Y / 3Y / 5Y로 비교합니다. 패널을 드래그하여 순서를 변경할 수 있습니다.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -178,8 +241,8 @@ export default function MacroPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading
-          ? Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="h-[280px] animate-pulse rounded-[28px] bg-slate-100" />
+          ? Array.from({ length: 11 }).map((_, index) => (
+              <div key={index} className="h-[320px] animate-pulse rounded-[28px] bg-slate-100" />
             ))
           : panels.map((panel, index) => (
               <MacroPanel
@@ -189,6 +252,11 @@ export default function MacroPage() {
                 period={period}
                 presets={presets}
                 onUpdate={loadPage}
+                index={index}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                isDragOver={dragOverIndex === index}
               />
             ))}
       </section>

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import List
 from database import get_db, MacroPanel
 from cache_utils import get_or_set
 import yfinance as yf
@@ -44,6 +45,29 @@ class UpdatePanelRequest(BaseModel):
 def get_panels(db: Session = Depends(get_db)):
     panels = db.query(MacroPanel).order_by(MacroPanel.slot).all()
     return [{"slot": p.slot, "ticker": p.ticker, "label": p.label} for p in panels]
+
+
+class ReorderRequest(BaseModel):
+    slots: List[int]
+
+
+@router.put("/panels/reorder")
+def reorder_panels(req: ReorderRequest, db: Session = Depends(get_db)):
+    panels = db.query(MacroPanel).order_by(MacroPanel.slot).all()
+    panel_data = [(p.ticker, p.label) for p in panels]
+    slot_to_data = {panels[i].slot: panel_data[i] for i in range(len(panels))}
+
+    ordered_data = []
+    for s in req.slots:
+        if s in slot_to_data:
+            ordered_data.append(slot_to_data[s])
+
+    for i, panel in enumerate(panels):
+        if i < len(ordered_data):
+            panel.ticker = ordered_data[i][0]
+            panel.label = ordered_data[i][1]
+    db.commit()
+    return {"ok": True}
 
 
 @router.put("/panels/{slot}")

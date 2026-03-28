@@ -50,16 +50,23 @@ def init_db():
         ]
         db.add_all(defaults)
 
-    if db.query(MacroPanel).count() == 0:
-        panels = [
-            MacroPanel(slot=0, ticker="US10YT=X", label="미국 10Y 금리"),
-            MacroPanel(slot=1, ticker="SP500",    label="S&P 500"),
-            MacroPanel(slot=2, ticker="DX-Y.NYB", label="달러 인덱스"),
-            MacroPanel(slot=3, ticker="CL=F",     label="WTI 유가"),
-            MacroPanel(slot=4, ticker="VIX",      label="VIX 지수"),
-            MacroPanel(slot=5, ticker="QQQ",      label="나스닥 100"),
-        ]
-        db.add_all(panels)
+    all_default_panels = [
+        MacroPanel(slot=0,  ticker="US10YT=X", label="미국 10Y 금리"),
+        MacroPanel(slot=1,  ticker="SP500",    label="S&P 500"),
+        MacroPanel(slot=2,  ticker="DX-Y.NYB", label="달러 인덱스"),
+        MacroPanel(slot=3,  ticker="CL=F",     label="WTI 유가"),
+        MacroPanel(slot=4,  ticker="VIX",      label="VIX 지수"),
+        MacroPanel(slot=5,  ticker="QQQ",      label="나스닥 100"),
+        MacroPanel(slot=6,  ticker="KS11",     label="KOSPI"),
+        MacroPanel(slot=7,  ticker="KQ11",     label="KOSDAQ"),
+        MacroPanel(slot=8,  ticker="GC=F",     label="금 선물"),
+        MacroPanel(slot=9,  ticker="IXIC",     label="나스닥 종합"),
+        MacroPanel(slot=10, ticker="DJI",      label="다우존스"),
+    ]
+    existing_slots = {p.slot for p in db.query(MacroPanel).all()}
+    new_panels = [p for p in all_default_panels if p.slot not in existing_slots]
+    if new_panels:
+        db.add_all(new_panels)
 
     if db.query(EventFilter).count() == 0:
         filters = [
