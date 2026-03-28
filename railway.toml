@@ -1,6 +1,6 @@
 [build]
-buildCommand = "pip install -r backend/requirements.txt"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "bash start.sh"
 healthcheckPath = "/health"

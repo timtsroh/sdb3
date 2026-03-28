@@ -1,4 +1,4 @@
-# Stock Research Dashboard
+# sdb3
 
 PRD1 기준 개인용 주식 투자 대시보드입니다.
 
@@ -29,5 +29,5 @@ npm run dev
 
 ## 배포
 
-- Railway: 현재 저장소에 있는 `railway.toml`과 `start.sh`로 바로 배포하기 가장 편합니다.
-- Vercel: 프론트엔드 단독 배포는 좋지만, 현재처럼 FastAPI 백엔드와 SQLite를 함께 운용할 때는 추가 분리가 필요합니다.
+- Railway: 루트의 `Dockerfile`과 `railway.toml` 기준으로 바로 배포할 수 있습니다.
+- GitHub: 독립 저장소 `timtsroh/sdb3` 기준으로 관리합니다.
