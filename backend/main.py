@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from routers import watchlist, macro, calendar_events
+from routers import watchlist, macro, calendar_events, supply
 import database
 import os
 
@@ -20,6 +20,7 @@ database.init_db()
 
 app.include_router(watchlist.router,       prefix="/api/watchlist", tags=["watchlist"])
 app.include_router(macro.router,           prefix="/api/macro",     tags=["macro"])
+app.include_router(supply.router,          prefix="/api/supply",    tags=["supply"])
 app.include_router(calendar_events.router, prefix="/api/calendar",  tags=["calendar"])
 
 

@@ -22,10 +22,11 @@ class WatchlistItem(Base):
 
 class MacroPanel(Base):
     __tablename__ = "macro_panels"
-    id     = Column(Integer, primary_key=True, index=True)
-    slot   = Column(Integer, unique=True)
-    ticker = Column(String)
-    label  = Column(String)
+    id          = Column(Integer, primary_key=True, index=True)
+    slot        = Column(Integer, unique=True)
+    ticker      = Column(String)
+    label       = Column(String)
+    panel_group = Column(String, default="macro")
 
 
 class EventFilter(Base):
@@ -39,6 +40,12 @@ class EventFilter(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        column_names = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(macro_panels)").fetchall()]
+        if "panel_group" not in column_names:
+            conn.exec_driver_sql("ALTER TABLE macro_panels ADD COLUMN panel_group VARCHAR DEFAULT 'macro'")
+
     db = SessionLocal()
 
     if db.query(WatchlistItem).count() == 0:
@@ -50,23 +57,27 @@ def init_db():
         ]
         db.add_all(defaults)
 
+    market_tickers = {"SP500", "QQQ", "KS11", "KQ11", "IXIC", "DJI"}
     all_default_panels = [
-        MacroPanel(slot=0,  ticker="US10YT=X", label="미국 10Y 금리"),
-        MacroPanel(slot=1,  ticker="SP500",    label="S&P 500"),
-        MacroPanel(slot=2,  ticker="DX-Y.NYB", label="달러 인덱스"),
-        MacroPanel(slot=3,  ticker="CL=F",     label="WTI 유가"),
-        MacroPanel(slot=4,  ticker="VIX",      label="VIX 지수"),
-        MacroPanel(slot=5,  ticker="QQQ",      label="나스닥 100"),
-        MacroPanel(slot=6,  ticker="KS11",     label="KOSPI"),
-        MacroPanel(slot=7,  ticker="KQ11",     label="KOSDAQ"),
-        MacroPanel(slot=8,  ticker="GC=F",     label="금 선물"),
-        MacroPanel(slot=9,  ticker="IXIC",     label="나스닥 종합"),
-        MacroPanel(slot=10, ticker="DJI",      label="다우존스"),
+        MacroPanel(slot=0,  ticker="US10YT=X", label="미국 10Y 금리", panel_group="macro"),
+        MacroPanel(slot=1,  ticker="SP500",    label="S&P 500", panel_group="market"),
+        MacroPanel(slot=2,  ticker="DX-Y.NYB", label="달러 인덱스", panel_group="macro"),
+        MacroPanel(slot=3,  ticker="CL=F",     label="WTI 유가", panel_group="macro"),
+        MacroPanel(slot=4,  ticker="VIX",      label="VIX 지수", panel_group="macro"),
+        MacroPanel(slot=5,  ticker="QQQ",      label="나스닥 100", panel_group="market"),
+        MacroPanel(slot=6,  ticker="KS11",     label="KOSPI", panel_group="market"),
+        MacroPanel(slot=7,  ticker="KQ11",     label="KOSDAQ", panel_group="market"),
+        MacroPanel(slot=8,  ticker="GC=F",     label="금 선물", panel_group="macro"),
+        MacroPanel(slot=9,  ticker="IXIC",     label="나스닥 종합", panel_group="market"),
+        MacroPanel(slot=10, ticker="DJI",      label="다우존스", panel_group="market"),
     ]
     existing_slots = {p.slot for p in db.query(MacroPanel).all()}
     new_panels = [p for p in all_default_panels if p.slot not in existing_slots]
     if new_panels:
         db.add_all(new_panels)
+
+    for panel in db.query(MacroPanel).all():
+        panel.panel_group = "market" if panel.ticker in market_tickers else "macro"
 
     if db.query(EventFilter).count() == 0:
         filters = [
