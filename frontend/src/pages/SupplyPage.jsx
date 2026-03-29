@@ -20,7 +20,7 @@ const PERIOD_OPTIONS = [
 const TREND_IMAGE_MAP = {
   '1m': 'OneMonth',
   '3m': 'ThreeMonth',
-  '1y': 'ThreeMonth',
+  '1y': 'OneYear',
 }
 
 function formatDateLabel(value) {
@@ -41,6 +41,32 @@ function formatNumber(value) {
   if (Math.abs(numericValue) >= 1000000) return `${(numericValue / 1000000).toFixed(1)}M`
   if (Math.abs(numericValue) >= 1000) return `${(numericValue / 1000).toFixed(1)}k`
   return numericValue.toFixed(0)
+}
+
+function axisUnitLabel(text) {
+  return {
+    value: text,
+    angle: -90,
+    position: 'insideLeft',
+    offset: 10,
+    style: {
+      fill: '#94a3b8',
+      fontSize: 11,
+    },
+  }
+}
+
+function rightAxisUnitLabel(text) {
+  return {
+    value: text,
+    angle: 90,
+    position: 'insideRight',
+    offset: 10,
+    style: {
+      fill: '#94a3b8',
+      fontSize: 11,
+    },
+  }
 }
 
 function buildTicks(data) {
@@ -139,21 +165,21 @@ export default function SupplyPage() {
       <section className="grid gap-4 md:grid-cols-2">
         <SupplyChartCard
           title="KOSPI 투자자별 매수·매도 동향"
-          description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다."
+          description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다. 1Y는 별도 연간 이미지로 전환됩니다."
           source="Naver Finance 투자자별 거래실적 이미지"
         >
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
-            <img src={kospiInvestorImage} alt="KOSPI 투자자별 매수·매도 동향" className="h-[320px] w-full object-cover" />
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
+            <img src={kospiInvestorImage} alt="KOSPI 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
           </div>
         </SupplyChartCard>
 
         <SupplyChartCard
           title="KOSDAQ 투자자별 매수·매도 동향"
-          description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다."
+          description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다. 1Y는 별도 연간 이미지로 전환됩니다."
           source="Naver Finance 투자자별 거래실적 이미지"
         >
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
-            <img src={kosdaqInvestorImage} alt="KOSDAQ 투자자별 매수·매도 동향" className="h-[320px] w-full object-cover" />
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
+            <img src={kosdaqInvestorImage} alt="KOSDAQ 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
           </div>
         </SupplyChartCard>
       </section>
@@ -171,8 +197,8 @@ export default function SupplyPage() {
               <LineChart data={depositSeries.data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
                 <XAxis dataKey="date" ticks={depositTicks} tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#64748b' }} />
-                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={56} />
-                <YAxis yAxisId="right" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={56} />
+                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={64} label={axisUnitLabel('좌측 Y축 단위: 억원')} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={64} label={rightAxisUnitLabel('우측 Y축 단위: 억원')} />
                 <Tooltip
                   contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
                   labelFormatter={formatDateLabel}
@@ -202,8 +228,8 @@ export default function SupplyPage() {
               <LineChart data={amountSeries.data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
                 <XAxis dataKey="date" ticks={amountTicks} tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#64748b' }} />
-                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={56} />
-                <YAxis yAxisId="right" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={56} />
+                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={72} label={axisUnitLabel('좌측 Y축 단위: 백만원')} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={72} label={rightAxisUnitLabel('우측 Y축 단위: 백만원')} />
                 <Tooltip
                   contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
                   labelFormatter={formatDateLabel}

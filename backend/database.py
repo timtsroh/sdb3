@@ -79,6 +79,11 @@ def init_db():
     for panel in db.query(MacroPanel).all():
         panel.panel_group = "market" if panel.ticker in market_tickers else "macro"
 
+    db.query(MacroPanel).filter(MacroPanel.panel_group == "macro", MacroPanel.ticker == "QQQ").update(
+        {MacroPanel.panel_group: "market"},
+        synchronize_session=False,
+    )
+
     if db.query(EventFilter).count() == 0:
         filters = [
             EventFilter(key="earnings",     label="Earnings Call",   enabled=True, color="#3b82f6"),
