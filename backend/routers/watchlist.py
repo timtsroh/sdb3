@@ -116,9 +116,10 @@ def fetch_stock_info(ticker: str, market: str) -> dict:
             prev   = df.iloc[-2] if len(df) > 1 else latest
             price  = float(latest["Close"])
             change = (price - float(prev["Close"])) / float(prev["Close"]) * 100
+            korean_name = lookup_company_name(ticker, market) or ticker
             try:
                 info   = yf.Ticker(f"{ticker}.KS").info
-                name   = info.get("longName") or info.get("shortName") or lookup_company_name(ticker, market) or ticker
+                name   = korean_name or info.get("longName") or info.get("shortName") or ticker
                 mktcap = info.get("marketCap")
                 per    = info.get("trailingPE")
                 pbr    = info.get("priceToBook")
@@ -126,7 +127,7 @@ def fetch_stock_info(ticker: str, market: str) -> dict:
                 lo52   = info.get("fiftyTwoWeekLow")
             except Exception:
                 logger.exception("yfinance .info failed for %s.KS", ticker)
-                name = lookup_company_name(ticker, market) or ticker
+                name = korean_name
                 mktcap = per = pbr = hi52 = lo52 = None
             return dict(ticker=ticker, name=name, market=market,
                         price=price, change_pct=round(change, 2),

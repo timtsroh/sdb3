@@ -19,12 +19,14 @@ const SORT_OPTIONS = [
   { value: 'per', label: 'PER' },
 ]
 
-function fmtCap(value) {
-  if (value == null) return '-'
-  if (value >= 1e12) return `${(value / 1e12).toFixed(1)}T`
-  if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`
-  if (value >= 1e8) return `${(value / 1e8).toFixed(1)}E`
-  return Number(value).toLocaleString()
+function fmtWholeNumber(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-'
+  return Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+function fmtPrice(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-'
+  return Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
 function fmtNum(value, digits = 2) {
@@ -41,16 +43,6 @@ function pctColor(value) {
   if (value > 0) return 'text-emerald-600'
   if (value < 0) return 'text-rose-600'
   return 'text-slate-600'
-}
-
-function StatCard({ label, value, subValue }) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-slate-900">{value}</p>
-      {subValue ? <p className="mt-1 text-xs text-slate-500">{subValue}</p> : null}
-    </div>
-  )
 }
 
 export default function WatchlistPage() {
@@ -182,24 +174,6 @@ export default function WatchlistPage() {
     })
   }, [sortBy, stocks])
 
-  const stats = useMemo(() => {
-    if (sorted.length === 0) {
-      return { totalMarketCap: '-', averageMove: '-', topMover: '-' }
-    }
-
-    const marketCaps = sorted.map(item => item.market_cap || 0)
-    const changes = sorted.map(item => item.change_pct || 0)
-    const totalMarketCap = fmtCap(marketCaps.reduce((sum, value) => sum + value, 0))
-    const averageMove = `${fmtNum(changes.reduce((sum, value) => sum + value, 0) / changes.length)}%`
-    const topMoverItem = [...sorted].sort((left, right) => Math.abs(right.change_pct || 0) - Math.abs(left.change_pct || 0))[0]
-
-    return {
-      totalMarketCap,
-      averageMove,
-      topMover: topMoverItem ? `${topMoverItem.name || topMoverItem.ticker} ${fmtPct(topMoverItem.change_pct)}` : '-',
-    }
-  }, [sorted])
-
   const finChartData = useMemo(() => {
     if (!finData) return []
     return finData.quarters
@@ -221,12 +195,6 @@ export default function WatchlistPage() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Watchlist" value={`${sorted.length} 종목`} subValue="개인 관심종목 저장" />
-        <StatCard label="Total Market Cap" value={stats.totalMarketCap} subValue="등록 종목 시총 합산" />
-        <StatCard label="Top Mover" value={stats.topMover} subValue={`평균 등락률 ${stats.averageMove}`} />
-      </section>
-
       <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
           <div className="relative flex flex-1 flex-wrap items-start gap-2">
@@ -345,13 +313,13 @@ export default function WatchlistPage() {
                         <p className="text-sm font-semibold text-slate-900">{stock.name || '-'}</p>
                         <p className="mt-1 text-xs font-mono text-slate-500">{stock.ticker}</p>
                       </div>
-                      <div className="text-sm text-slate-700">{fmtNum(stock.price)}</div>
+                      <div className="text-sm text-slate-700">{fmtPrice(stock.price)}</div>
                       <div className={`text-sm ${pctColor(stock.change_pct)}`}>{fmtPct(stock.change_pct)}</div>
-                      <div className="text-sm text-slate-700">{fmtCap(stock.market_cap)}</div>
+                      <div className="text-sm text-slate-700">{fmtWholeNumber(stock.market_cap)}</div>
                       <div className="text-sm text-slate-700">{stock.per != null ? `${fmtNum(stock.per)}x` : '-'}</div>
                       <div className="text-sm text-slate-700">{stock.pbr != null ? `${fmtNum(stock.pbr)}x` : '-'}</div>
-                      <div className="text-sm text-slate-700">{fmtNum(stock.week52_high)}</div>
-                      <div className="text-sm text-slate-700">{fmtNum(stock.week52_low)}</div>
+                      <div className="text-sm text-slate-700">{fmtPrice(stock.week52_high)}</div>
+                      <div className="text-sm text-slate-700">{fmtPrice(stock.week52_low)}</div>
                       <div className="flex justify-end">
                         <button
                           type="button"

@@ -43,6 +43,24 @@ function formatNumber(value) {
   return numericValue.toFixed(0)
 }
 
+function formatDepositInTrillionWon(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '-'
+  }
+
+  return (numericValue / 10000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+function formatAmountInTrillionWon(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '-'
+  }
+
+  return (numericValue / 1000000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
 function axisUnitLabel(text) {
   return {
     value: text,
@@ -171,6 +189,7 @@ export default function SupplyPage() {
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
             <img src={kospiInvestorImage} alt="KOSPI 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
           </div>
+          <p className="mt-3 text-xs text-slate-500">Y축 단위: 억원</p>
         </SupplyChartCard>
 
         <SupplyChartCard
@@ -181,6 +200,7 @@ export default function SupplyPage() {
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
             <img src={kosdaqInvestorImage} alt="KOSDAQ 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
           </div>
+          <p className="mt-3 text-xs text-slate-500">Y축 단위: 억원</p>
         </SupplyChartCard>
       </section>
 
@@ -197,12 +217,12 @@ export default function SupplyPage() {
               <LineChart data={depositSeries.data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
                 <XAxis dataKey="date" ticks={depositTicks} tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#64748b' }} />
-                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={64} label={axisUnitLabel('좌측 Y축 단위: 억원')} />
-                <YAxis yAxisId="right" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={64} label={rightAxisUnitLabel('우측 Y축 단위: 억원')} />
+                <YAxis tickFormatter={formatDepositInTrillionWon} tick={{ fontSize: 10, fill: '#64748b' }} width={64} label={axisUnitLabel('좌측 Y축 단위: 조원')} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={formatDepositInTrillionWon} tick={{ fontSize: 10, fill: '#64748b' }} width={64} label={rightAxisUnitLabel('우측 Y축 단위: 조원')} />
                 <Tooltip
                   contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
                   labelFormatter={formatDateLabel}
-                  formatter={value => [Number(value).toLocaleString(), '']}
+                  formatter={value => [`${formatDepositInTrillionWon(value)} 조원`, '']}
                 />
                 <Legend />
                 <Line type="monotone" dataKey="kospi_deposit" name="KOSPI 예탁금" stroke="#0284c7" dot={false} strokeWidth={2} />
@@ -228,12 +248,12 @@ export default function SupplyPage() {
               <LineChart data={amountSeries.data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
                 <XAxis dataKey="date" ticks={amountTicks} tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#64748b' }} />
-                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={72} label={axisUnitLabel('좌측 Y축 단위: 백만원')} />
-                <YAxis yAxisId="right" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 10, fill: '#64748b' }} width={72} label={rightAxisUnitLabel('우측 Y축 단위: 백만원')} />
+                <YAxis tickFormatter={formatAmountInTrillionWon} tick={{ fontSize: 10, fill: '#64748b' }} width={72} label={axisUnitLabel('좌측 Y축 단위: 조원')} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={formatAmountInTrillionWon} tick={{ fontSize: 10, fill: '#64748b' }} width={72} label={rightAxisUnitLabel('우측 Y축 단위: 조원')} />
                 <Tooltip
                   contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
                   labelFormatter={formatDateLabel}
-                  formatter={value => [Number(value).toLocaleString(), '']}
+                  formatter={value => [`${formatAmountInTrillionWon(value)} 조원`, '']}
                 />
                 <Legend />
                 <Line type="monotone" dataKey="kospi_amount" name="KOSPI 거래대금" stroke="#0f766e" dot={false} strokeWidth={2} />

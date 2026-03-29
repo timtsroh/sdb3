@@ -278,8 +278,9 @@ export default function MarketPanelGrid({ group, title, description, badge = 'Da
       const [panelResponse, presetResponse] = await Promise.all([
         axios.get(`/api/macro/panels?group=${group}`),
         axios.get(`/api/macro/presets?group=${group}`),
-      ])
-      setPanels(panelResponse.data)
+        ])
+      const nextPanels = panelResponse.data.filter(panel => !(group === 'macro' && panel.ticker === 'QQQ'))
+      setPanels(nextPanels)
       setPresets(presetResponse.data)
     } finally {
       setLoading(false)

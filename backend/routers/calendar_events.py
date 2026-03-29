@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database import get_db, EventFilter, WatchlistItem
 from cache_utils import get_or_set
+from routers.watchlist import lookup_company_name
 import yfinance as yf
 from datetime import date
 
@@ -186,6 +187,8 @@ def get_events(db: Session = Depends(get_db)):
         for item in watchlist:
             def fetch_earnings():
                 sym = f"{item.ticker}.KS" if item.market == "KR" else item.ticker
+                display_name = lookup_company_name(item.ticker, item.market) if item.market == "KR" else None
+                display_name = display_name or item.name or item.ticker
                 cal = yf.Ticker(sym).calendar
                 result = []
                 if cal is not None and "Earnings Date" in cal:
@@ -199,13 +202,13 @@ def get_events(db: Session = Depends(get_db)):
                         target_date = date.fromisoformat(event_date)
                         result.append({
                             "date": event_date,
-                            "title": f"{item.name or item.ticker} Earnings",
+                            "title": f"{display_name} Earnings",
                             "key": "earnings",
                             "color": f_earn.color,
                             "type": f_earn.label,
                             "source": "Yahoo Finance calendar",
                             "ticker": item.ticker,
-                            "detail": f"{item.name or item.ticker} 실적 발표 예정",
+                            "detail": f"{display_name} 실적 발표 예정",
                             "d_day": (target_date - date.today()).days,
                         })
                 return result

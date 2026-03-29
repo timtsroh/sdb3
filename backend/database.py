@@ -83,6 +83,10 @@ def init_db():
         {MacroPanel.panel_group: "market"},
         synchronize_session=False,
     )
+    db.query(MacroPanel).filter(MacroPanel.slot == 10).update(
+        {MacroPanel.ticker: "DJI", MacroPanel.label: "다우존스", MacroPanel.panel_group: "market"},
+        synchronize_session=False,
+    )
 
     if db.query(EventFilter).count() == 0:
         filters = [
