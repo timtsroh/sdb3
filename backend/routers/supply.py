@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter
+from pykrx import stock as pykrx_stock
 
 from cache_utils import get_or_set
 
@@ -27,6 +28,8 @@ PERIOD_DAYS = {
     "3m": 100,
     "1y": 380,
 }
+
+INVESTOR_MARKETS = {"KOSPI", "KOSDAQ"}
 
 
 def _fetch_text(url: str) -> str:
@@ -160,4 +163,51 @@ def get_supply_deposits(period: str = "3m"):
         ttl_seconds=TTL_SECONDS,
         fetcher=fetch_deposits,
         fallback={"data": [], "source": "Naver Finance 증시자금동향"},
+    )
+
+
+@router.get("/investors")
+def get_supply_investors(market: str = "KOSPI", period: str = "3m"):
+    normalized_market = market.upper()
+    if normalized_market not in INVESTOR_MARKETS:
+        return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
+
+    def fetch_investors():
+        to_date = datetime.today()
+        from_date = to_date - timedelta(days=PERIOD_DAYS.get(period, PERIOD_DAYS["3m"]))
+        start = from_date.strftime("%Y%m%d")
+        end = to_date.strftime("%Y%m%d")
+
+        buy_df = pykrx_stock.get_market_trading_value_by_date(start, end, normalized_market, on="매수")
+        sell_df = pykrx_stock.get_market_trading_value_by_date(start, end, normalized_market, on="매도")
+
+        if buy_df is None or buy_df.empty or sell_df is None or sell_df.empty:
+            return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
+
+        buy_df = buy_df.rename(columns={"기관합계": "institution", "개인": "personal", "외국인합계": "foreign"})
+        sell_df = sell_df.rename(columns={"기관합계": "institution", "개인": "personal", "외국인합계": "foreign"})
+
+        rows = []
+        for trade_date in buy_df.index:
+            if trade_date not in sell_df.index:
+                continue
+            rows.append(
+                {
+                    "date": trade_date.strftime("%Y-%m-%d"),
+                    "personal_buy": float(buy_df.at[trade_date, "personal"]),
+                    "personal_sell": float(sell_df.at[trade_date, "personal"]),
+                    "institution_buy": float(buy_df.at[trade_date, "institution"]),
+                    "institution_sell": float(sell_df.at[trade_date, "institution"]),
+                    "foreign_buy": float(buy_df.at[trade_date, "foreign"]),
+                    "foreign_sell": float(sell_df.at[trade_date, "foreign"]),
+                }
+            )
+
+        return {"data": rows, "source": "KRX / pykrx 투자자별 거래대금"}
+
+    return get_or_set(
+        key=f"supply:investors:{normalized_market}:{period}",
+        ttl_seconds=TTL_SECONDS,
+        fetcher=fetch_investors,
+        fallback={"data": [], "source": "KRX / pykrx 투자자별 거래대금"},
     )

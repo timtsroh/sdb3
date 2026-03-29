@@ -250,7 +250,7 @@ function PanelCard({ panel, color, period, onUpdate, onDelete, presets, index, o
             onClick={() => setEditing(value => !value)}
             className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
           >
-            {editing ? '닫기' : '패널 편집'}
+            {editing ? '닫기' : '편집'}
           </button>
           <button
             onClick={() => onDelete(panel.slot)}

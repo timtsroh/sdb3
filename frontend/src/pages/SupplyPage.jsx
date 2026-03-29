@@ -17,12 +17,6 @@ const PERIOD_OPTIONS = [
   { id: '1y', label: '1Y' },
 ]
 
-const TREND_IMAGE_MAP = {
-  '1m': 'OneMonth',
-  '3m': 'ThreeMonth',
-  '1y': 'OneYear',
-}
-
 function formatDateLabel(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -41,6 +35,15 @@ function formatNumber(value) {
   if (Math.abs(numericValue) >= 1000000) return `${(numericValue / 1000000).toFixed(1)}M`
   if (Math.abs(numericValue) >= 1000) return `${(numericValue / 1000).toFixed(1)}k`
   return numericValue.toFixed(0)
+}
+
+function formatWonInTrillion(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '-'
+  }
+
+  return (numericValue / 1000000000000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
 function formatDepositInTrillionWon(value) {
@@ -125,6 +128,8 @@ export default function SupplyPage() {
   const [period, setPeriod] = useState('3m')
   const [amountSeries, setAmountSeries] = useState({ data: [], source: 'Naver Finance 일별지수 시세' })
   const [depositSeries, setDepositSeries] = useState({ data: [], source: 'Naver Finance 증시자금동향' })
+  const [kospiInvestorSeries, setKospiInvestorSeries] = useState({ data: [], source: 'KRX / pykrx 투자자별 거래대금' })
+  const [kosdaqInvestorSeries, setKosdaqInvestorSeries] = useState({ data: [], source: 'KRX / pykrx 투자자별 거래대금' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -134,15 +139,21 @@ export default function SupplyPage() {
   async function loadData(currentPeriod) {
     setLoading(true)
     try {
-      const [amountResponse, depositResponse] = await Promise.all([
+      const [amountResponse, depositResponse, kospiInvestorResponse, kosdaqInvestorResponse] = await Promise.all([
         axios.get(`/api/supply/amounts?period=${currentPeriod}`),
         axios.get(`/api/supply/deposits?period=${currentPeriod}`),
+        axios.get(`/api/supply/investors?market=KOSPI&period=${currentPeriod}`),
+        axios.get(`/api/supply/investors?market=KOSDAQ&period=${currentPeriod}`),
       ])
       setAmountSeries(amountResponse.data)
       setDepositSeries(depositResponse.data)
+      setKospiInvestorSeries(kospiInvestorResponse.data)
+      setKosdaqInvestorSeries(kosdaqInvestorResponse.data)
     } catch {
       setAmountSeries({ data: [], source: 'Naver Finance 일별지수 시세' })
       setDepositSeries({ data: [], source: 'Naver Finance 증시자금동향' })
+      setKospiInvestorSeries({ data: [], source: 'KRX / pykrx 투자자별 거래대금' })
+      setKosdaqInvestorSeries({ data: [], source: 'KRX / pykrx 투자자별 거래대금' })
     } finally {
       setLoading(false)
     }
@@ -150,9 +161,8 @@ export default function SupplyPage() {
 
   const amountTicks = useMemo(() => buildTicks(amountSeries.data), [amountSeries.data])
   const depositTicks = useMemo(() => buildTicks(depositSeries.data), [depositSeries.data])
-  const trendSuffix = TREND_IMAGE_MAP[period] ?? TREND_IMAGE_MAP['3m']
-  const kospiInvestorImage = `https://ssl.pstatic.net/imgfinance/chart/sise/trendUitrade${trendSuffix}KOSPI.png?ts=${Date.now()}`
-  const kosdaqInvestorImage = `https://ssl.pstatic.net/imgfinance/chart/sise/trendUitrade${trendSuffix}KOSDAQ.png?ts=${Date.now()}`
+  const kospiInvestorTicks = useMemo(() => buildTicks(kospiInvestorSeries.data), [kospiInvestorSeries.data])
+  const kosdaqInvestorTicks = useMemo(() => buildTicks(kosdaqInvestorSeries.data), [kosdaqInvestorSeries.data])
 
   return (
     <div className="space-y-6">
@@ -183,24 +193,70 @@ export default function SupplyPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SupplyChartCard
           title="KOSPI 투자자별 매수·매도 동향"
-          description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다. 1Y는 별도 연간 이미지로 전환됩니다."
-          source="Naver Finance 투자자별 거래실적 이미지"
+          description="개인, 기관, 외국인의 매수·매도 거래대금을 조원 단위로 표시합니다."
+          source={kospiInvestorSeries.source}
         >
-          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
-            <span className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2 py-1 text-[11px] text-slate-500 shadow-sm">단위: 조원</span>
-            <img src={kospiInvestorImage} alt="KOSPI 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
-          </div>
+          {loading ? (
+            <div className="h-[320px] animate-pulse rounded-3xl bg-slate-100" />
+          ) : kospiInvestorSeries.data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={kospiInvestorSeries.data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
+                <XAxis dataKey="date" ticks={kospiInvestorTicks} tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#64748b' }} />
+                <YAxis tickFormatter={formatWonInTrillion} tick={{ fontSize: 10, fill: '#64748b' }} width={68} label={axisUnitLabel('Y축 단위: 조원')} />
+                <Tooltip
+                  contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
+                  labelFormatter={formatDateLabel}
+                  formatter={(value, name) => [`${formatWonInTrillion(value)} 조원`, name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="personal_buy" name="개인 매수" stroke="#2563eb" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="personal_sell" name="개인 매도" stroke="#2563eb" dot={false} strokeDasharray="4 3" strokeWidth={2} />
+                <Line type="monotone" dataKey="institution_buy" name="기관 매수" stroke="#16a34a" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="institution_sell" name="기관 매도" stroke="#16a34a" dot={false} strokeDasharray="4 3" strokeWidth={2} />
+                <Line type="monotone" dataKey="foreign_buy" name="외국인 매수" stroke="#dc2626" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="foreign_sell" name="외국인 매도" stroke="#dc2626" dot={false} strokeDasharray="4 3" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[320px] items-center justify-center rounded-3xl bg-slate-50 text-sm text-slate-500">
+              데이터를 가져오지 못했습니다.
+            </div>
+          )}
         </SupplyChartCard>
 
         <SupplyChartCard
           title="KOSDAQ 투자자별 매수·매도 동향"
-          description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다. 1Y는 별도 연간 이미지로 전환됩니다."
-          source="Naver Finance 투자자별 거래실적 이미지"
+          description="개인, 기관, 외국인의 매수·매도 거래대금을 조원 단위로 표시합니다."
+          source={kosdaqInvestorSeries.source}
         >
-          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
-            <span className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2 py-1 text-[11px] text-slate-500 shadow-sm">단위: 조원</span>
-            <img src={kosdaqInvestorImage} alt="KOSDAQ 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
-          </div>
+          {loading ? (
+            <div className="h-[320px] animate-pulse rounded-3xl bg-slate-100" />
+          ) : kosdaqInvestorSeries.data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={kosdaqInvestorSeries.data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
+                <XAxis dataKey="date" ticks={kosdaqInvestorTicks} tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#64748b' }} />
+                <YAxis tickFormatter={formatWonInTrillion} tick={{ fontSize: 10, fill: '#64748b' }} width={68} label={axisUnitLabel('Y축 단위: 조원')} />
+                <Tooltip
+                  contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
+                  labelFormatter={formatDateLabel}
+                  formatter={(value, name) => [`${formatWonInTrillion(value)} 조원`, name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="personal_buy" name="개인 매수" stroke="#2563eb" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="personal_sell" name="개인 매도" stroke="#2563eb" dot={false} strokeDasharray="4 3" strokeWidth={2} />
+                <Line type="monotone" dataKey="institution_buy" name="기관 매수" stroke="#16a34a" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="institution_sell" name="기관 매도" stroke="#16a34a" dot={false} strokeDasharray="4 3" strokeWidth={2} />
+                <Line type="monotone" dataKey="foreign_buy" name="외국인 매수" stroke="#dc2626" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="foreign_sell" name="외국인 매도" stroke="#dc2626" dot={false} strokeDasharray="4 3" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[320px] items-center justify-center rounded-3xl bg-slate-50 text-sm text-slate-500">
+              데이터를 가져오지 못했습니다.
+            </div>
+          )}
         </SupplyChartCard>
 
         <SupplyChartCard
