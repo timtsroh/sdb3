@@ -42,6 +42,10 @@ class UpdatePanelRequest(BaseModel):
     group:  str = "macro"
 
 
+class CreatePanelRequest(BaseModel):
+    group: str = "macro"
+
+
 @router.get("/panels")
 def get_panels(group: str = Query(default="macro"), db: Session = Depends(get_db)):
     panels = db.query(MacroPanel).filter(MacroPanel.panel_group == group).order_by(MacroPanel.slot).all()
@@ -51,10 +55,21 @@ def get_panels(group: str = Query(default="macro"), db: Session = Depends(get_db
             "ticker": p.ticker,
             "label": p.label,
             "group": p.panel_group,
+            "is_empty": not p.ticker,
             "source": PRESET_TICKERS.get(p.ticker, {}).get("source", "FinanceDataReader / Yahoo Finance"),
         }
         for p in panels
     ]
+
+
+@router.post("/panels")
+def create_panel(req: CreatePanelRequest, db: Session = Depends(get_db)):
+    max_slot = db.query(MacroPanel).filter(MacroPanel.panel_group == req.group).order_by(MacroPanel.slot.desc()).first()
+    next_slot = (max_slot.slot + 1) if max_slot else 0
+    panel = MacroPanel(slot=next_slot, ticker="", label="빈 패널", panel_group=req.group)
+    db.add(panel)
+    db.commit()
+    return {"ok": True, "slot": next_slot}
 
 
 class ReorderRequest(BaseModel):
@@ -91,6 +106,15 @@ def update_panel(slot: int, req: UpdatePanelRequest, db: Session = Depends(get_d
     return {"ok": True}
 
 
+@router.delete("/panels/{slot}")
+def delete_panel(slot: int, group: str = Query(default="macro"), db: Session = Depends(get_db)):
+    panel = db.query(MacroPanel).filter(MacroPanel.slot == slot, MacroPanel.panel_group == group).first()
+    if panel:
+        db.delete(panel)
+        db.commit()
+    return {"ok": True}
+
+
 @router.get("/presets")
 def get_presets(group: str = Query(default="macro")):
     return [
@@ -102,6 +126,9 @@ def get_presets(group: str = Query(default="macro")):
 
 @router.get("/chart/{ticker}")
 def get_macro_chart(ticker: str, period: str = "5y"):
+    if not ticker:
+        return {"data": [], "latest": None, "change": None, "period_change": None, "source": None}
+
     normalized_ticker = LEGACY_TICKER_MAP.get(ticker, ticker)
     source = PRESET_TICKERS.get(normalized_ticker, {}).get("source", "FinanceDataReader / Yahoo Finance")
 

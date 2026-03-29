@@ -48,6 +48,85 @@ function formatChartNumber(value) {
   return numericValue.toFixed(3)
 }
 
+function EmptyPanelCard({ group, presets, onCreate, onClose }) {
+  const [editing, setEditing] = useState(false)
+  const [selectedTicker, setSelectedTicker] = useState(presets[0]?.ticker ?? '')
+  const selectedPreset = presets.find(item => item.ticker === selectedTicker)
+
+  async function savePanel() {
+    if (!selectedPreset) return
+    await onCreate(selectedPreset)
+    setEditing(false)
+  }
+
+  return (
+    <article className="rounded-[28px] border border-dashed border-slate-300 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Empty Panel</p>
+          <h3 className="mt-2 text-lg font-semibold text-slate-900">빈 패널</h3>
+          <p className="mt-2 text-xs text-slate-500">새 지표를 추가하려면 패널추가 버튼을 눌러 주세요.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setEditing(value => !value)}
+            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
+          >
+            {editing ? '닫기' : '패널추가'}
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+          >
+            X
+          </button>
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-slate-700">패널 항목 선택</p>
+            <p className="text-xs text-slate-500">{presets.length}개 항목 전체 보기</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {presets.map(preset => (
+              <button
+                key={`${group}-${preset.ticker}`}
+                type="button"
+                onClick={() => setSelectedTicker(preset.ticker)}
+                className={`rounded-2xl border px-3 py-3 text-left transition ${
+                  preset.ticker === selectedTicker
+                    ? 'border-sky-500 bg-sky-50 shadow-[0_10px_30px_rgba(14,165,233,0.12)]'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <p className="text-sm font-medium text-slate-900">{preset.label}</p>
+                <p className="mt-1 text-xs text-slate-500">{preset.ticker}</p>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-600">
+              선택 항목: <span className="font-medium text-slate-900">{selectedPreset?.label ?? '-'}</span>
+            </div>
+            <button
+              onClick={savePanel}
+              className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-sky-700"
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex h-[220px] items-center justify-center rounded-3xl bg-slate-50 text-sm text-slate-500">
+          패널추가로 새 항목을 배치할 수 있습니다.
+        </div>
+      )}
+    </article>
+  )
+}
+
 function buildDateTicks(series) {
   if (series.length <= 1) {
     return series.map(item => item.date)
@@ -90,7 +169,7 @@ function buildValueTicks(series) {
   return Array.from({ length: tickCount }, (_, index) => Number((min + step * index).toFixed(4)))
 }
 
-function PanelCard({ panel, color, period, onUpdate, presets, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, panelLabel, group }) {
+function PanelCard({ panel, color, period, onUpdate, onDelete, presets, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, panelLabel, group }) {
   const [data, setData] = useState({ data: [], latest: null, change: null, period_change: null, source: panel.source })
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -104,6 +183,11 @@ function PanelCard({ panel, color, period, onUpdate, presets, index, onDragStart
   }, [panel.ticker])
 
   useEffect(() => {
+    if (!panel.ticker) {
+      setData({ data: [], latest: null, change: null, period_change: null, source: null })
+      setLoading(false)
+      return
+    }
     loadData(panel.ticker, period)
   }, [panel.ticker, period])
 
@@ -161,12 +245,20 @@ function PanelCard({ panel, color, period, onUpdate, presets, index, onDragStart
             일간 변화율과 최근 {PERIOD_LABELS[period]} 전체 변화율을 함께 표시합니다.
           </p>
         </div>
-        <button
-          onClick={() => setEditing(value => !value)}
-          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
-        >
-          {editing ? '닫기' : '패널 편집'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setEditing(value => !value)}
+            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
+          >
+            {editing ? '닫기' : '패널 편집'}
+          </button>
+          <button
+            onClick={() => onDelete(panel.slot)}
+            className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+          >
+            X
+          </button>
+        </div>
       </div>
 
       {editing ? (
@@ -323,6 +415,37 @@ export default function MarketPanelGrid({ group, title, description, badge = 'Da
     setDragOverIndex(null)
   }, [])
 
+  async function handleDelete(slot) {
+    await axios.delete(`/api/macro/panels/${slot}?group=${group}`)
+    await loadPage()
+  }
+
+  async function handleCreate(preset) {
+    const { data } = await axios.post('/api/macro/panels', { group })
+    await axios.put(`/api/macro/panels/${data.slot}`, { ticker: preset.ticker, label: preset.label, group })
+    await loadPage()
+  }
+
+  async function handleCloseEmptyPanel() {
+    const empties = panels.filter(panel => !panel.ticker)
+    const target = empties[empties.length - 1]
+    if (!target) return
+    await handleDelete(target.slot)
+  }
+
+  const displayPanels = useMemo(() => {
+    const nextPanels = [...panels]
+    nextPanels.push({
+      slot: `empty-${group}`,
+      ticker: '',
+      label: '빈 패널',
+      group,
+      is_empty: true,
+      source: null,
+    })
+    return nextPanels
+  }, [group, panels])
+
   return (
     <div className="space-y-6">
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -360,24 +483,35 @@ export default function MarketPanelGrid({ group, title, description, badge = 'Da
           ? Array.from({ length: Math.max(panels.length, presets.length, 5) || 5 }).map((_, index) => (
               <div key={index} className="h-[340px] animate-pulse rounded-[28px] bg-slate-100" />
             ))
-          : panels.map((panel, index) => (
-              <PanelCard
-                key={panel.slot}
-                panel={panel}
-                color={PANEL_COLORS[index % PANEL_COLORS.length]}
-                period={period}
-                presets={presets}
-                onUpdate={loadPage}
-                index={index}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onDragEnd={handleDragEnd}
-                isDragOver={dragOverIndex === index}
-                panelLabel={panelLabel}
-                group={group}
-              />
-            ))}
+          : displayPanels.map((panel, index) =>
+              panel.is_empty ? (
+                <EmptyPanelCard
+                  key={panel.slot}
+                  group={group}
+                  presets={presets}
+                  onCreate={handleCreate}
+                  onClose={handleCloseEmptyPanel}
+                />
+              ) : (
+                <PanelCard
+                  key={panel.slot}
+                  panel={panel}
+                  color={PANEL_COLORS[index % PANEL_COLORS.length]}
+                  period={period}
+                  presets={presets}
+                  onUpdate={loadPage}
+                  onDelete={handleDelete}
+                  index={index}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDragOver={dragOverIndex === index}
+                  panelLabel={panelLabel}
+                  group={group}
+                />
+              )
+            )}
       </section>
     </div>
   )

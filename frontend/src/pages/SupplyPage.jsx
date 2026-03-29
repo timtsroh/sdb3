@@ -180,16 +180,16 @@ export default function SupplyPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SupplyChartCard
           title="KOSPI 투자자별 매수·매도 동향"
           description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다. 1Y는 별도 연간 이미지로 전환됩니다."
           source="Naver Finance 투자자별 거래실적 이미지"
         >
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
+            <span className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2 py-1 text-[11px] text-slate-500 shadow-sm">단위: 조원</span>
             <img src={kospiInvestorImage} alt="KOSPI 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
           </div>
-          <p className="mt-3 text-xs text-slate-500">Y축 단위: 억원</p>
         </SupplyChartCard>
 
         <SupplyChartCard
@@ -197,14 +197,12 @@ export default function SupplyPage() {
           description="개인, 기관, 외국인 흐름을 Naver Finance 투자자별 거래실적 차트로 표시합니다. 1Y는 별도 연간 이미지로 전환됩니다."
           source="Naver Finance 투자자별 거래실적 이미지"
         >
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-3">
+            <span className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2 py-1 text-[11px] text-slate-500 shadow-sm">단위: 조원</span>
             <img src={kosdaqInvestorImage} alt="KOSDAQ 투자자별 매수·매도 동향" className="h-[360px] w-full object-contain" />
           </div>
-          <p className="mt-3 text-xs text-slate-500">Y축 단위: 억원</p>
         </SupplyChartCard>
-      </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
         <SupplyChartCard
           title="KOSPI·KOSDAQ 예탁금 잔고"
           description="KOSPI 예탁금 잔고는 좌측 Y축, KOSDAQ 예탁금 잔고는 우측 Y축으로 표시합니다. 고객예탁금 총액을 시장별 거래대금 비중으로 배분해 흐름을 추정합니다."

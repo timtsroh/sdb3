@@ -26,7 +26,17 @@ function fmtWholeNumber(value) {
 
 function fmtPrice(value) {
   if (value == null || Number.isNaN(Number(value))) return '-'
-  return Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  return Math.round(Number(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+function fmtMarketCap(value, market) {
+  if (value == null || Number.isNaN(Number(value))) return '-'
+  const numericValue = Number(value)
+  const currency = market === 'KR' ? 'KRW' : 'USD'
+
+  if (Math.abs(numericValue) >= 1e12) return `${currency} ${(numericValue / 1e12).toFixed(1)}tn`
+  if (Math.abs(numericValue) >= 1e9) return `${currency} ${(numericValue / 1e9).toFixed(1)}bn`
+  return `${currency} ${(numericValue / 1e6).toFixed(1)}mn`
 }
 
 function fmtNum(value, digits = 2) {
@@ -188,8 +198,8 @@ export default function WatchlistPage() {
   }, [finData])
 
   const metricCards = [
-    { label: 'PER', value: finData?.metrics?.per != null ? `${fmtNum(finData.metrics.per)}x` : '-' },
-    { label: 'PBR', value: finData?.metrics?.pbr != null ? `${fmtNum(finData.metrics.pbr)}x` : '-' },
+    { label: 'PER', value: finData?.metrics?.per != null ? `${fmtNum(finData.metrics.per, 1)}x` : '-' },
+    { label: 'PBR', value: finData?.metrics?.pbr != null ? `${fmtNum(finData.metrics.pbr, 1)}x` : '-' },
     { label: 'ROE', value: finData?.metrics?.roe != null ? `${fmtNum(finData.metrics.roe * 100)}%` : '-' },
   ]
 
@@ -313,13 +323,13 @@ export default function WatchlistPage() {
                         <p className="text-sm font-semibold text-slate-900">{stock.name || '-'}</p>
                         <p className="mt-1 text-xs font-mono text-slate-500">{stock.ticker}</p>
                       </div>
-                      <div className="text-sm text-slate-700">{fmtPrice(stock.price)}</div>
+                      <div className="text-right text-sm text-slate-700">{fmtPrice(stock.price)}</div>
                       <div className={`text-sm ${pctColor(stock.change_pct)}`}>{fmtPct(stock.change_pct)}</div>
-                      <div className="text-sm text-slate-700">{fmtWholeNumber(stock.market_cap)}</div>
-                      <div className="text-sm text-slate-700">{stock.per != null ? `${fmtNum(stock.per)}x` : '-'}</div>
-                      <div className="text-sm text-slate-700">{stock.pbr != null ? `${fmtNum(stock.pbr)}x` : '-'}</div>
-                      <div className="text-sm text-slate-700">{fmtPrice(stock.week52_high)}</div>
-                      <div className="text-sm text-slate-700">{fmtPrice(stock.week52_low)}</div>
+                      <div className="text-right text-sm text-slate-700">{fmtMarketCap(stock.market_cap, stock.market)}</div>
+                      <div className="text-right text-sm text-slate-700">{stock.per != null ? `${fmtNum(stock.per, 1)}x` : '-'}</div>
+                      <div className="text-right text-sm text-slate-700">{stock.pbr != null ? `${fmtNum(stock.pbr, 1)}x` : '-'}</div>
+                      <div className="text-right text-sm text-slate-700">{fmtPrice(stock.week52_high)}</div>
+                      <div className="text-right text-sm text-slate-700">{fmtPrice(stock.week52_low)}</div>
                       <div className="flex justify-end">
                         <button
                           type="button"
