@@ -16,7 +16,7 @@ const PANEL_COLORS = [
 ]
 
 function MacroPanel({ panel, color, period, onUpdate, presets, index, onDragStart, onDragOver, onDrop, isDragOver }) {
-  const [data, setData] = useState({ data: [], latest: null, change: null })
+  const [data, setData] = useState({ data: [], latest: null, change: null, period_change: null })
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [selectedTicker, setSelectedTicker] = useState(panel.ticker)
@@ -69,8 +69,12 @@ function MacroPanel({ panel, color, period, onUpdate, presets, index, onDragStar
             </span>
             {data.change != null ? (
               <span className={`rounded-full px-2 py-1 text-xs ${data.change >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                {data.change > 0 ? '+' : ''}
-                {data.change}%
+                일간 {data.change > 0 ? '+' : ''}{data.change}%
+              </span>
+            ) : null}
+            {data.period_change != null ? (
+              <span className={`rounded-full px-2 py-1 text-xs ${data.period_change >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
+                {period.toUpperCase()} {data.period_change > 0 ? '+' : ''}{data.period_change}%
               </span>
             ) : null}
           </div>
@@ -114,23 +118,30 @@ function MacroPanel({ panel, color, period, onUpdate, presets, index, onDragStar
               <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                tick={{ fontSize: 10, fill: '#64748b' }}
+                tickLine={{ stroke: '#cbd5e1' }}
+                axisLine={{ stroke: '#cbd5e1' }}
                 tickFormatter={value => {
                   const d = new Date(value)
                   return `${d.getFullYear().toString().slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')}`
                 }}
                 interval="preserveStartEnd"
                 minTickGap={40}
+                tickCount={6}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                tick={{ fontSize: 10, fill: '#64748b' }}
+                tickLine={{ stroke: '#cbd5e1' }}
+                axisLine={{ stroke: '#cbd5e1' }}
                 tickFormatter={value => {
+                  if (Math.abs(value) >= 10000) return (value / 1000).toFixed(0) + 'k'
                   if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + 'k'
                   if (Math.abs(value) >= 1) return Number(value).toFixed(1)
                   return Number(value).toFixed(3)
                 }}
-                width={45}
+                width={52}
                 domain={['auto', 'auto']}
+                tickCount={6}
               />
               <Tooltip
                 contentStyle={{ background: '#ffffff', border: '1px solid #dbe4f0', borderRadius: 16 }}
@@ -239,7 +250,7 @@ export default function MacroPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-3">
         {loading
           ? Array.from({ length: 11 }).map((_, index) => (
               <div key={index} className="h-[320px] animate-pulse rounded-[28px] bg-slate-100" />

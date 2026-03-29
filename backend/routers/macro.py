@@ -121,7 +121,9 @@ def get_macro_chart(ticker: str, period: str = "5y"):
         latest = float(df["close"].iloc[-1])
         prev   = float(df["close"].iloc[-2]) if len(df) > 1 else latest
         change = round((latest - prev) / prev * 100, 2)
-        return {"data": df.to_dict(orient="records"), "latest": round(latest, 4), "change": change}
+        first  = float(df["close"].iloc[0])
+        period_change = round((latest - first) / first * 100, 2) if first != 0 else 0
+        return {"data": df.to_dict(orient="records"), "latest": round(latest, 4), "change": change, "period_change": period_change}
 
     return get_or_set(
         key=f"macro:chart:{normalized_ticker}:{period}",
