@@ -19,11 +19,6 @@ const SORT_OPTIONS = [
   { value: 'per', label: 'PER' },
 ]
 
-function fmtWholeNumber(value) {
-  if (value == null || Number.isNaN(Number(value))) return '-'
-  return Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 })
-}
-
 function fmtPrice(value) {
   if (value == null || Number.isNaN(Number(value))) return '-'
   return Math.round(Number(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })
@@ -32,11 +27,15 @@ function fmtPrice(value) {
 function fmtMarketCap(value, market) {
   if (value == null || Number.isNaN(Number(value))) return '-'
   const numericValue = Number(value)
-  const currency = market === 'KR' ? 'KRW' : 'USD'
 
-  if (Math.abs(numericValue) >= 1e12) return `${currency} ${(numericValue / 1e12).toFixed(1)}tn`
-  if (Math.abs(numericValue) >= 1e9) return `${currency} ${(numericValue / 1e9).toFixed(1)}bn`
-  return `${currency} ${(numericValue / 1e6).toFixed(1)}mn`
+  if (market === 'KR') {
+    if (Math.abs(numericValue) >= 1e12) return `${Math.round(numericValue / 1e12).toLocaleString('ko-KR')} 조원`
+    return `${Math.round(numericValue / 1e9).toLocaleString('ko-KR')} 십억원`
+  }
+
+  if (Math.abs(numericValue) >= 1e12) return `USD ${(numericValue / 1e12).toFixed(1)}tn`
+  if (Math.abs(numericValue) >= 1e9) return `USD ${(numericValue / 1e9).toFixed(1)}bn`
+  return `USD ${(numericValue / 1e6).toFixed(1)}mn`
 }
 
 function fmtNum(value, digits = 2) {
@@ -57,6 +56,9 @@ function pctColor(value) {
 
 export default function WatchlistPage() {
   const [stocks, setStocks] = useState([])
+  const [groups, setGroups] = useState([])
+  const [selectedGroup, setSelectedGroup] = useState('전체')
+  const [newGroupName, setNewGroupName] = useState('')
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [chartData, setChartData] = useState([])
@@ -74,6 +76,7 @@ export default function WatchlistPage() {
 
   useEffect(() => {
     loadWatchlist()
+    loadGroups()
   }, [])
 
   useEffect(() => {
@@ -116,6 +119,15 @@ export default function WatchlistPage() {
     }
   }
 
+  async function loadGroups() {
+    try {
+      const { data } = await axios.get('/api/watchlist/groups')
+      setGroups(data)
+    } catch {
+      setGroups(['관심종목'])
+    }
+  }
+
   async function loadChart(targetTicker, period) {
     try {
       const { data } = await axios.get(`/api/watchlist/${targetTicker}/chart?period=${period}`)
@@ -150,16 +162,56 @@ export default function WatchlistPage() {
     setAdding(true)
     setError('')
     try {
-      await axios.post('/api/watchlist/', { ticker: targetTicker, market: targetMarket })
+      await axios.post('/api/watchlist/', {
+        ticker: targetTicker,
+        market: targetMarket,
+        group_name: selectedGroup === '전체' ? '관심종목' : selectedGroup,
+      })
       setTicker('')
       setQuery('')
       setSuggestions([])
       setSelectedSuggestion(null)
-      await loadWatchlist()
+      await Promise.all([loadWatchlist(), loadGroups()])
     } catch (event) {
       setError(event.response?.data?.detail || '종목 추가에 실패했습니다.')
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function addGroup() {
+    const name = newGroupName.trim()
+    if (!name) return
+    try {
+      await axios.post('/api/watchlist/groups', { name })
+      setNewGroupName('')
+      await loadGroups()
+      setSelectedGroup(name)
+    } catch (event) {
+      setError(event.response?.data?.detail || '그룹 추가에 실패했습니다.')
+    }
+  }
+
+  async function deleteGroup(groupName) {
+    if (!groupName || groupName === '전체') return
+    try {
+      await axios.delete(`/api/watchlist/groups/${encodeURIComponent(groupName)}`)
+      if (selectedGroup === groupName) {
+        setSelectedGroup('전체')
+      }
+      await Promise.all([loadGroups(), loadWatchlist()])
+    } catch {
+      setError('그룹 삭제에 실패했습니다.')
+    }
+  }
+
+  async function updateStockGroup(targetTicker, groupName, event) {
+    event.stopPropagation()
+    try {
+      await axios.put(`/api/watchlist/${targetTicker}/group`, { group_name: groupName })
+      await loadWatchlist()
+    } catch {
+      setError('그룹 이동에 실패했습니다.')
     }
   }
 
@@ -176,13 +228,18 @@ export default function WatchlistPage() {
     }
   }
 
+  const filteredStocks = useMemo(() => {
+    if (selectedGroup === '전체') return stocks
+    return stocks.filter(item => item.group_name === selectedGroup)
+  }, [selectedGroup, stocks])
+
   const sorted = useMemo(() => {
-    return [...stocks].sort((left, right) => {
+    return [...filteredStocks].sort((left, right) => {
       const lv = left[sortBy] ?? Number.NEGATIVE_INFINITY
       const rv = right[sortBy] ?? Number.NEGATIVE_INFINITY
       return rv - lv
     })
-  }, [sortBy, stocks])
+  }, [filteredStocks, sortBy])
 
   const finChartData = useMemo(() => {
     if (!finData) return []
@@ -196,12 +253,6 @@ export default function WatchlistPage() {
       }))
       .reverse()
   }, [finData])
-
-  const metricCards = [
-    { label: 'PER', value: finData?.metrics?.per != null ? `${fmtNum(finData.metrics.per, 1)}x` : '-' },
-    { label: 'PBR', value: finData?.metrics?.pbr != null ? `${fmtNum(finData.metrics.pbr, 1)}x` : '-' },
-    { label: 'ROE', value: finData?.metrics?.roe != null ? `${fmtNum(finData.metrics.roe * 100)}%` : '-' },
-  ]
 
   return (
     <div className="space-y-6">
@@ -286,7 +337,55 @@ export default function WatchlistPage() {
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.9fr)]">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[220px_minmax(0,1.5fr)_minmax(320px,0.85fr)]">
+          <aside className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-900">관심종목</p>
+              {selectedGroup !== '전체' ? (
+                <button
+                  type="button"
+                  onClick={() => deleteGroup(selectedGroup)}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  삭제
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {['전체', ...groups].map(group => (
+                <button
+                  key={group}
+                  type="button"
+                  onClick={() => setSelectedGroup(group)}
+                  className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition ${
+                    selectedGroup === group ? 'bg-sky-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{group}</span>
+                  {group !== '전체' ? <span className="text-xs">{stocks.filter(item => item.group_name === group).length}</span> : null}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <input
+                value={newGroupName}
+                onChange={event => setNewGroupName(event.target.value)}
+                onKeyDown={event => event.key === 'Enter' && addGroup()}
+                placeholder="새 그룹명"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none focus:border-sky-500"
+              />
+              <button
+                type="button"
+                onClick={addGroup}
+                className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                그룹 추가
+              </button>
+            </div>
+          </aside>
+
           <div className="min-w-0">
             {loading ? (
               <div className="space-y-3">
@@ -296,7 +395,7 @@ export default function WatchlistPage() {
               </div>
             ) : (
               <div className="overflow-hidden rounded-3xl border border-slate-200">
-                <div className="hidden grid-cols-[1.2fr_repeat(7,minmax(0,1fr))_56px] gap-3 bg-slate-50 px-4 py-3 text-xs uppercase tracking-[0.18em] text-slate-500 md:grid">
+                <div className="hidden grid-cols-[1.2fr_repeat(7,minmax(0,1fr))_140px] gap-3 bg-slate-50 px-4 py-3 text-xs uppercase tracking-[0.18em] text-slate-500 md:grid">
                   <span>종목</span>
                   <span>현재가</span>
                   <span>등락률</span>
@@ -315,13 +414,16 @@ export default function WatchlistPage() {
                       onKeyDown={event => event.key === 'Enter' && setSelected(stock)}
                       role="button"
                       tabIndex={0}
-                      className={`grid w-full cursor-pointer gap-3 px-4 py-4 text-left transition hover:bg-sky-50 md:grid-cols-[1.2fr_repeat(7,minmax(0,1fr))_56px] ${
+                      className={`grid w-full cursor-pointer gap-3 px-4 py-4 text-left transition hover:bg-sky-50 md:grid-cols-[1.2fr_repeat(7,minmax(0,1fr))_140px] ${
                         selected?.ticker === stock.ticker ? 'bg-sky-50' : 'bg-transparent'
                       }`}
                     >
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{stock.name || '-'}</p>
-                        <p className="mt-1 text-xs font-mono text-slate-500">{stock.ticker}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <p className="text-xs font-mono text-slate-500">{stock.ticker}</p>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600">{stock.group_name || '관심종목'}</span>
+                        </div>
                       </div>
                       <div className="text-right text-sm text-slate-700">{fmtPrice(stock.price)}</div>
                       <div className={`text-sm ${pctColor(stock.change_pct)}`}>{fmtPct(stock.change_pct)}</div>
@@ -330,7 +432,18 @@ export default function WatchlistPage() {
                       <div className="text-right text-sm text-slate-700">{stock.pbr != null ? `${fmtNum(stock.pbr, 1)}x` : '-'}</div>
                       <div className="text-right text-sm text-slate-700">{fmtPrice(stock.week52_high)}</div>
                       <div className="text-right text-sm text-slate-700">{fmtPrice(stock.week52_low)}</div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        <select
+                          value={stock.group_name || '관심종목'}
+                          onChange={event => updateStockGroup(stock.ticker, event.target.value, event)}
+                          className="rounded-xl border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none"
+                        >
+                          {groups.map(group => (
+                            <option key={group} value={group}>
+                              {group}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           onClick={event => removeStock(stock.ticker, event)}
@@ -342,7 +455,7 @@ export default function WatchlistPage() {
                     </div>
                   ))}
                   {sorted.length === 0 ? (
-                    <div className="px-6 py-12 text-center text-sm text-slate-500">첫 관심종목을 추가해 보세요.</div>
+                    <div className="px-6 py-12 text-center text-sm text-slate-500">선택한 그룹에 종목이 없습니다.</div>
                   ) : null}
                 </div>
               </div>
@@ -358,6 +471,7 @@ export default function WatchlistPage() {
                     <p className="mt-1 font-mono text-sm text-slate-500">{selected.ticker}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-600">{selected.market}</span>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-600">{selected.group_name || '관심종목'}</span>
                       <span className={`rounded-full bg-white px-3 py-1 text-xs ${pctColor(selected.change_pct)}`}>
                         {fmtPct(selected.change_pct)}
                       </span>
@@ -376,15 +490,6 @@ export default function WatchlistPage() {
                       </button>
                     ))}
                   </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {metricCards.map(card => (
-                    <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
-                      <p className="mt-3 text-xl font-semibold text-slate-900">{card.value}</p>
-                    </div>
-                  ))}
                 </div>
 
                 <div className="rounded-3xl border border-slate-200 bg-white p-4">

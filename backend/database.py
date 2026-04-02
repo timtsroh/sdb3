@@ -17,7 +17,14 @@ class WatchlistItem(Base):
     ticker   = Column(String, unique=True, nullable=False)
     name     = Column(String)
     market   = Column(String, default="US")
+    group_name = Column(String, default="관심종목")
     added_at = Column(DateTime, default=datetime.utcnow)
+
+
+class WatchlistGroup(Base):
+    __tablename__ = "watchlist_groups"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
 
 
 class MacroPanel(Base):
@@ -42,6 +49,9 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     with engine.begin() as conn:
+        watchlist_columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(watchlist)").fetchall()]
+        if "group_name" not in watchlist_columns:
+            conn.exec_driver_sql("ALTER TABLE watchlist ADD COLUMN group_name VARCHAR DEFAULT '관심종목'")
         column_names = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(macro_panels)").fetchall()]
         if "panel_group" not in column_names:
             conn.exec_driver_sql("ALTER TABLE macro_panels ADD COLUMN panel_group VARCHAR DEFAULT 'macro'")
@@ -50,12 +60,25 @@ def init_db():
 
     if db.query(WatchlistItem).count() == 0:
         defaults = [
-            WatchlistItem(ticker="AAPL",   name="Apple",      market="US"),
-            WatchlistItem(ticker="NVDA",   name="NVIDIA",     market="US"),
-            WatchlistItem(ticker="005930", name="삼성전자",   market="KR"),
-            WatchlistItem(ticker="000660", name="SK하이닉스", market="KR"),
+            WatchlistItem(ticker="AAPL",   name="Apple",      market="US", group_name="관심종목"),
+            WatchlistItem(ticker="NVDA",   name="NVIDIA",     market="US", group_name="반도체"),
+            WatchlistItem(ticker="005930", name="삼성전자",   market="KR", group_name="보유종목"),
+            WatchlistItem(ticker="000660", name="SK하이닉스", market="KR", group_name="반도체"),
         ]
         db.add_all(defaults)
+
+    if db.query(WatchlistGroup).count() == 0:
+        db.add_all([
+            WatchlistGroup(name="보유종목"),
+            WatchlistGroup(name="관심종목"),
+            WatchlistGroup(name="반도체"),
+            WatchlistGroup(name="조선"),
+            WatchlistGroup(name="바이오"),
+        ])
+
+    for item in db.query(WatchlistItem).all():
+        if not item.group_name:
+            item.group_name = "관심종목"
 
     market_tickers = {"SP500", "QQQ", "KS11", "KQ11", "IXIC", "DJI"}
     all_default_panels = [

@@ -92,6 +92,27 @@ def _parse_deposit_history(period: str) -> list[dict]:
     return sorted(rows.values(), key=lambda item: item["date"])
 
 
+def _latest_available_market_date(market: str) -> datetime:
+    rows = _parse_index_history(market, "1m")
+    if rows:
+        return datetime.strptime(rows[-1]["date"], "%Y-%m-%d")
+    return datetime.today()
+
+
+def _rename_investor_columns(df):
+    column_map = {}
+    for candidates, target in (
+        (("개인", "개인투자자"), "personal"),
+        (("기관합계", "기관계", "기관"), "institution"),
+        (("외국인합계", "외국인", "외국인투자자"), "foreign"),
+    ):
+        for candidate in candidates:
+            if candidate in df.columns:
+                column_map[candidate] = target
+                break
+    return df.rename(columns=column_map)
+
+
 @router.get("/amounts")
 def get_supply_amounts(period: str = "3m"):
     def fetch_amounts():
@@ -173,7 +194,7 @@ def get_supply_investors(market: str = "KOSPI", period: str = "3m"):
         return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
 
     def fetch_investors():
-        to_date = datetime.today()
+        to_date = _latest_available_market_date(normalized_market)
         from_date = to_date - timedelta(days=PERIOD_DAYS.get(period, PERIOD_DAYS["3m"]))
         start = from_date.strftime("%Y%m%d")
         end = to_date.strftime("%Y%m%d")
@@ -184,8 +205,12 @@ def get_supply_investors(market: str = "KOSPI", period: str = "3m"):
         if buy_df is None or buy_df.empty or sell_df is None or sell_df.empty:
             return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
 
-        buy_df = buy_df.rename(columns={"기관합계": "institution", "개인": "personal", "외국인합계": "foreign"})
-        sell_df = sell_df.rename(columns={"기관합계": "institution", "개인": "personal", "외국인합계": "foreign"})
+        buy_df = _rename_investor_columns(buy_df)
+        sell_df = _rename_investor_columns(sell_df)
+
+        required_columns = {"personal", "institution", "foreign"}
+        if not required_columns.issubset(set(buy_df.columns)) or not required_columns.issubset(set(sell_df.columns)):
+            return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
 
         rows = []
         for trade_date in buy_df.index:
@@ -206,7 +231,7 @@ def get_supply_investors(market: str = "KOSPI", period: str = "3m"):
         return {"data": rows, "source": "KRX / pykrx 투자자별 거래대금"}
 
     return get_or_set(
-        key=f"supply:investors:{normalized_market}:{period}",
+        key=f"supply:investors:v3:{normalized_market}:{period}",
         ttl_seconds=TTL_SECONDS,
         fetcher=fetch_investors,
         fallback={"data": [], "source": "KRX / pykrx 투자자별 거래대금"},

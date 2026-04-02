@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from database import get_db, WatchlistItem
+from database import get_db, WatchlistItem, WatchlistGroup
 from cache_utils import get_or_set
 import yfinance as yf
 import FinanceDataReader as fdr
@@ -19,6 +19,15 @@ SEARCH_TTL_SECONDS = 3600 * 24
 class AddStockRequest(BaseModel):
     ticker: str
     market: str = "US"
+    group_name: str = "관심종목"
+
+
+class GroupRequest(BaseModel):
+    name: str
+
+
+class UpdateGroupRequest(BaseModel):
+    group_name: str
 
 
 def lookup_company_name(ticker: str, market: str) -> str | None:
@@ -238,8 +247,45 @@ def get_watchlist(db: Session = Depends(get_db)):
         )
         if not payload.get("name") or payload.get("name") == payload.get("ticker"):
             payload["name"] = item.name or lookup_company_name(item.ticker, item.market) or item.ticker
+        payload["group_name"] = item.group_name or "관심종목"
         result.append(payload)
     return result
+
+
+@router.get("/groups")
+def get_watchlist_groups(db: Session = Depends(get_db)):
+    groups = [group.name for group in db.query(WatchlistGroup).order_by(WatchlistGroup.id).all()]
+    item_groups = [name for (name,) in db.query(WatchlistItem.group_name).distinct().all() if name]
+    merged = []
+    for name in groups + item_groups:
+        if name not in merged:
+            merged.append(name)
+    return merged
+
+
+@router.post("/groups")
+def add_group(req: GroupRequest, db: Session = Depends(get_db)):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Group name is required")
+    if db.query(WatchlistGroup).filter(WatchlistGroup.name == name).first():
+        raise HTTPException(status_code=400, detail="Group already exists")
+    db.add(WatchlistGroup(name=name))
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/groups/{name}")
+def delete_group(name: str, db: Session = Depends(get_db)):
+    group = db.query(WatchlistGroup).filter(WatchlistGroup.name == name).first()
+    if group:
+        db.delete(group)
+    db.query(WatchlistItem).filter(WatchlistItem.group_name == name).update(
+        {WatchlistItem.group_name: "관심종목"},
+        synchronize_session=False,
+    )
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/search")
@@ -251,14 +297,31 @@ def autocomplete_stocks(q: str):
 def add_stock(req: AddStockRequest, db: Session = Depends(get_db)):
     if db.query(WatchlistItem).filter(WatchlistItem.ticker == req.ticker).first():
         raise HTTPException(status_code=400, detail="Already in watchlist")
+    if req.group_name and not db.query(WatchlistGroup).filter(WatchlistGroup.name == req.group_name).first():
+        db.add(WatchlistGroup(name=req.group_name))
+        db.commit()
     info = fetch_stock_info(req.ticker, req.market)
     item = WatchlistItem(
         ticker=req.ticker,
         name=info.get("name") or lookup_company_name(req.ticker, req.market) or req.ticker,
         market=req.market,
+        group_name=req.group_name or "관심종목",
     )
     db.add(item); db.commit()
     return info
+
+
+@router.put("/{ticker}/group")
+def update_stock_group(ticker: str, req: UpdateGroupRequest, db: Session = Depends(get_db)):
+    item = db.query(WatchlistItem).filter(WatchlistItem.ticker == ticker).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+    if req.group_name and not db.query(WatchlistGroup).filter(WatchlistGroup.name == req.group_name).first():
+        db.add(WatchlistGroup(name=req.group_name))
+        db.commit()
+    item.group_name = req.group_name or "관심종목"
+    db.commit()
+    return {"ok": True}
 
 
 @router.delete("/{ticker}")
