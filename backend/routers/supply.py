@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter
-from pykrx import stock as pykrx_stock
 
 from cache_utils import get_or_set
 
@@ -30,6 +29,7 @@ PERIOD_DAYS = {
 }
 
 INVESTOR_MARKETS = {"KOSPI", "KOSDAQ"}
+INVESTOR_SOSOK = {"KOSPI": "01", "KOSDAQ": "02"}
 
 
 def _fetch_text(url: str) -> str:
@@ -99,18 +99,46 @@ def _latest_available_market_date(market: str) -> datetime:
     return datetime.today()
 
 
-def _rename_investor_columns(df):
-    column_map = {}
-    for candidates, target in (
-        (("개인", "개인투자자"), "personal"),
-        (("기관합계", "기관계", "기관"), "institution"),
-        (("외국인합계", "외국인", "외국인투자자"), "foreign"),
-    ):
-        for candidate in candidates:
-            if candidate in df.columns:
-                column_map[candidate] = target
-                break
-    return df.rename(columns=column_map)
+def _parse_investor_history(market: str, period: str) -> list[dict]:
+    page_count = max(2, math.ceil(PERIOD_DAYS.get(period, PERIOD_DAYS["3m"]) / 10))
+    latest_date = _latest_available_market_date(market)
+    bizdate = latest_date.strftime("%Y%m%d")
+    rows: dict[str, dict] = {}
+
+    row_pattern = re.compile(r"<tr>\s*<td class=\"date2\">(?P<date>\d{2}\.\d{2}\.\d{2})</td>(?P<cells>.*?)</tr>", re.S)
+    value_pattern = re.compile(r"<td class=\"rate_(?:up|down|noc)3\">(?P<value>[-\d,]+)</td>")
+
+    for page in range(1, page_count + 1):
+        html = _fetch_text(
+            f"https://finance.naver.com/sise/investorDealTrendDay.naver?bizdate={bizdate}&sosok={INVESTOR_SOSOK[market]}&page={page}"
+        )
+        for match in row_pattern.finditer(html):
+            values = [int(value.replace(",", "")) for value in value_pattern.findall(match.group("cells"))]
+            if len(values) < 3:
+                continue
+
+            date = datetime.strptime(match.group("date"), "%y.%m.%d").strftime("%Y-%m-%d")
+            personal_net, foreign_net, institution_net = values[:3]
+
+            def split_flow(net_amount: int) -> tuple[float, float]:
+                won_amount = float(net_amount) * 100_000_000
+                return max(won_amount, 0.0), abs(min(won_amount, 0.0))
+
+            personal_buy, personal_sell = split_flow(personal_net)
+            institution_buy, institution_sell = split_flow(institution_net)
+            foreign_buy, foreign_sell = split_flow(foreign_net)
+
+            rows[date] = {
+                "date": date,
+                "personal_buy": personal_buy,
+                "personal_sell": personal_sell,
+                "institution_buy": institution_buy,
+                "institution_sell": institution_sell,
+                "foreign_buy": foreign_buy,
+                "foreign_sell": foreign_sell,
+            }
+
+    return sorted(rows.values(), key=lambda item: item["date"])
 
 
 @router.get("/amounts")
@@ -191,48 +219,17 @@ def get_supply_deposits(period: str = "3m"):
 def get_supply_investors(market: str = "KOSPI", period: str = "3m"):
     normalized_market = market.upper()
     if normalized_market not in INVESTOR_MARKETS:
-        return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
+        return {"data": [], "source": "Naver Finance 투자자별 매매동향"}
 
     def fetch_investors():
-        to_date = _latest_available_market_date(normalized_market)
-        from_date = to_date - timedelta(days=PERIOD_DAYS.get(period, PERIOD_DAYS["3m"]))
-        start = from_date.strftime("%Y%m%d")
-        end = to_date.strftime("%Y%m%d")
-
-        buy_df = pykrx_stock.get_market_trading_value_by_date(start, end, normalized_market, on="매수")
-        sell_df = pykrx_stock.get_market_trading_value_by_date(start, end, normalized_market, on="매도")
-
-        if buy_df is None or buy_df.empty or sell_df is None or sell_df.empty:
-            return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
-
-        buy_df = _rename_investor_columns(buy_df)
-        sell_df = _rename_investor_columns(sell_df)
-
-        required_columns = {"personal", "institution", "foreign"}
-        if not required_columns.issubset(set(buy_df.columns)) or not required_columns.issubset(set(sell_df.columns)):
-            return {"data": [], "source": "KRX / pykrx 투자자별 거래대금"}
-
-        rows = []
-        for trade_date in buy_df.index:
-            if trade_date not in sell_df.index:
-                continue
-            rows.append(
-                {
-                    "date": trade_date.strftime("%Y-%m-%d"),
-                    "personal_buy": float(buy_df.at[trade_date, "personal"]),
-                    "personal_sell": float(sell_df.at[trade_date, "personal"]),
-                    "institution_buy": float(buy_df.at[trade_date, "institution"]),
-                    "institution_sell": float(sell_df.at[trade_date, "institution"]),
-                    "foreign_buy": float(buy_df.at[trade_date, "foreign"]),
-                    "foreign_sell": float(sell_df.at[trade_date, "foreign"]),
-                }
-            )
-
-        return {"data": rows, "source": "KRX / pykrx 투자자별 거래대금"}
+        return {
+            "data": _parse_investor_history(normalized_market, period),
+            "source": "Naver Finance 투자자별 매매동향 (단위:억원, 순매수/순매도를 매수·매도로 분리)",
+        }
 
     return get_or_set(
-        key=f"supply:investors:v3:{normalized_market}:{period}",
+        key=f"supply:investors:v4:{normalized_market}:{period}",
         ttl_seconds=TTL_SECONDS,
         fetcher=fetch_investors,
-        fallback={"data": [], "source": "KRX / pykrx 투자자별 거래대금"},
+        fallback={"data": [], "source": "Naver Finance 투자자별 매매동향"},
     )
